@@ -1,94 +1,98 @@
 package com.parrot.validation;
 
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.NotAuthorizedException;
-import javax.ws.rs.NotFoundException;
+import com.parrot.config.ControllerExceptionHandler;
 
+/**
+ * This class is a fluent interface that allows you to conditionally return
+ * a particular HTTP status. Must be used in conjunction with
+ * {@link ControllerExceptionHandler}. Example usage:
+ * <code>
+ *     Validation
+ *	 		.returnStatus(ClientErrorStatusCode.BAD_REQUEST_400)
+ *	 		.ifTrue(someExpression)
+ *	 		.withErrorMessage("Your request needs some working on")
+ *	 		.execute();
+ * </code>
+ */
 public class Validation {
 
-    public static void badRequest(boolean expression) {
-        if( ! expression ) {
-            throw new BadRequestException();
-        }
-    }
+	public static ValidationConditionStep returnStatus(ClientErrorStatusCode statusCode) {
+		return new ValidationBuilder(statusCode);
+	}
 
-    public static void badRequest(boolean expression, String errorMessage) {
-        if( ! expression ) {
-            throw new BadRequestException(errorMessage);
-        }
-    }
+	public interface ValidationConditionStep {
+		ValidationWithMessageStep always();
+		ValidationWithMessageStep ifTrue(boolean expression);
+		ValidationWithMessageStep ifFalse(boolean expression);
+		ValidationWithMessageStep ifNull(Object thing);
+		ValidationWithMessageStep ifNotNull(Object thing);
+	}
 
-    public static void badRequestNotNull(Object thing) {
-        if( thing == null ) {
-            throw new BadRequestException();
-        }
-    }
+	public interface ValidationWithMessageStep {
+        ValidationExecuteStep withNoErrorMessage();
+		ValidationExecuteStep withErrorMessage(String errorMessage);
 
-    public static void badRequestNotNull(Object thing, String errorMessage) {
-        if( thing == null ) {
-            throw new BadRequestException(errorMessage);
-        }
-    }
+	}
 
-    public static void unauthorized(boolean expression) {
-        if( ! expression ) {
-            //Not sure why there's no empty constructor for this exception
-            throw new NotAuthorizedException("");
-        }
-    }
+	public interface ValidationExecuteStep {
+		void execute();
+	}
 
-    public static void unauthorized(boolean expression, String errorMessage) {
-        if( ! expression ) {
-            throw new NotAuthorizedException(errorMessage, new Object());
-        }
-    }
+	private static class ValidationBuilder implements ValidationConditionStep, ValidationWithMessageStep, ValidationExecuteStep {
+		private boolean shouldThrowException;
+		private ClientErrorStatusCode statusToReturn;
+		private String errorMessage;
 
-    public static void forbidden(boolean expression) {
-        if( ! expression ) {
-            throw new ForbiddenException();
-        }
-    }
+		public ValidationBuilder(ClientErrorStatusCode statusToReturn) {
+			this.statusToReturn = statusToReturn;
+		}
 
-    public static void forbidden(boolean expression, String errorMessage) {
-        if( ! expression ) {
-            throw new ForbiddenException(errorMessage);
-        }
-    }
+		@Override
+		public ValidationWithMessageStep always() {
+			shouldThrowException = true;
+			return this;
+		}
 
-    public static void notFound(boolean expression) {
-        if( ! expression ) {
-            throw new NotFoundException();
-        }
-    }
+		@Override
+		public ValidationWithMessageStep ifTrue(boolean expression) {
+			shouldThrowException = expression;
+			return this;
+		}
 
-    public static void notFound(boolean expression, String errorMessage) {
-        if( ! expression ) {
-            throw new NotFoundException(errorMessage);
-        }
-    }
+		@Override
+		public ValidationWithMessageStep ifFalse(boolean expression) {
+			shouldThrowException = ! expression;
+			return this;
+		}
 
-    public static void notFoundNotNull(Object thing, String errorMessage) {
-        if( thing == null ) {
-            throw new NotFoundException(errorMessage);
-        }
-    }
+		@Override
+		public ValidationWithMessageStep ifNull(Object thing) {
+			shouldThrowException = thing == null;
+			return this;
+		}
 
-    public static void notFoundNotNull(Object thing) {
-        if( thing == null ) {
-            throw new NotFoundException();
-        }
-    }
+		@Override
+		public ValidationWithMessageStep ifNotNull(Object thing) {
+			shouldThrowException = thing != null;
+			return this;
+		}
 
-    public static void conflict(boolean expression) {
-        if( ! expression ) {
-            throw new ConflictException();
-        }
-    }
+		@Override
+		public ValidationExecuteStep withErrorMessage(String errorMessage) {
+			this.errorMessage = errorMessage;
+			return this;
+		}
 
-    public static void conflict(boolean expression, String errorMessage) {
-        if( ! expression ) {
-            throw new ConflictException(errorMessage);
-        }
-    }
+		@Override
+		public ValidationExecuteStep withNoErrorMessage() {
+			return this;
+		}
+
+		@Override
+		public void execute() {
+			if(shouldThrowException) {
+				throw new ClientErrorException(statusToReturn, errorMessage);
+			}
+		}
+	}
 }
